@@ -13,8 +13,8 @@ def _do_action():
     if len(sys.argv) > 1:
         _params = sys.argv[1:]
         params = {i[0]: i[1] for i in [j.split("=") for j in _params]}
-        action = params.get("action", None)
-        id = params.get("id", None)
+        action = params.get("action")
+        id = params.get("id")
 
         if action == "color_picker":
             color.color_picker()

@@ -41,21 +41,21 @@ def _get_zip_file(user, repo, branch=None, sha=None):
     if (sha and branch) or not (sha or branch):
         raise ValueError("Cannot specify both branch and sha")
     else:
-        return _store_zip_file(API.get_zipball(user, repo, sha if sha else branch))
+        return _store_zip_file(API.get_zipball(user, repo, sha or branch))
 
 
 def _store_zip_file(zip_contents):
-    zip_location = os.path.join(_addon_data, "{}.zip".format(int(time.time())))
+    zip_location = os.path.join(_addon_data, f"{int(time.time())}.zip")
     tools.write_to_file(zip_location, zip_contents, bytes=True)
 
     return zip_location
 
 
 def _extract_addon(zip_location, repo):
-    tools.log("Opening {}".format(zip_location))
+    tools.log(f"Opening {zip_location}")
     with zipfile.ZipFile(zip_location) as file:
         base_directory = file.namelist()[0]
-        tools.log("Extracting to: {}".format(os.path.join(_temp, base_directory)))
+        tools.log(f"Extracting to: {os.path.join(_temp, base_directory)}")
         for f in [
             i
             for i in file.namelist()
@@ -64,7 +64,7 @@ def _extract_addon(zip_location, repo):
             try:
                 file.extract(f, _temp)
             except Exception as e:
-                tools.log("Could not extract {}: {}".format(f, e))
+                tools.log(f"Could not extract {f}: {e}")
     install_path = os.path.join(_addons, repo["plugin_id"])
     tools.copytree(os.path.join(_temp, base_directory), install_path, ignore=True)
     tools.remove_folder(os.path.join(_temp, base_directory))
@@ -73,9 +73,9 @@ def _extract_addon(zip_location, repo):
 
 def _update_addon_version(addon, gitsha):
     addon_xml = os.path.join(_addons, addon, "addon.xml")
-    tools.log("Rewriting addon version: {}".format(addon_xml))
+    tools.log(f"Rewriting addon version: {addon_xml}")
 
-    replace_regex = r'<\1"\2.\3.\4-{}"\7>'.format(gitsha[:7])
+    replace_regex = f'<\1"\2.\3.\4-{gitsha[:7]}"\7>'
 
     content = tools.read_from_file(addon_xml)
     content = re.sub(
@@ -107,21 +107,20 @@ def _add_webpdb_to_addon(addon):
 
 def _rewrite_kodi_dependency_versions(addon):
     kodi_version = tools.kodi_version()
-    tools.log("KODI_VERSION: {}".format(kodi_version))
+    tools.log(f"KODI_VERSION: {kodi_version}")
     kodi_dep_versions = {
         18: {"xbmc.python": "2.26.0", "xbmc.gui": "5.14.0"},
         19: {"xbmc.python": "3.0.0", "xbmc.gui": "5.15.0"},
     }
 
-    if kodi_version in kodi_dep_versions:
-        kodi_deps = kodi_dep_versions[kodi_version]
-    else:
-        # Take latest version if we don't have version specific
-        kodi_deps = kodi_dep_versions[max(kodi_dep_versions)]
-    tools.log("KODI DEPENDENCY VERSIONS: {}".format(kodi_deps))
+    kodi_deps = kodi_dep_versions.get(
+        kodi_version, kodi_dep_versions[max(kodi_dep_versions)]
+    )
+
+    tools.log(f"KODI DEPENDENCY VERSIONS: {kodi_deps}")
 
     addon_xml = os.path.join(_addons, addon, "addon.xml")
-    tools.log("Rewriting {}".format(addon_xml))
+    tools.log(f"Rewriting {addon_xml}")
 
     content = tools.read_from_file(addon_xml)
     for dep in kodi_deps:
@@ -138,24 +137,20 @@ def _install_deps(addon):
     visible_cond = "Window.IsTopMost(yesnodialog)"
 
     xml_path = os.path.join(_addons, addon, "addon.xml")
-    tools.log("Finding dependencies in {}".format(xml_path))
+    tools.log(f"Finding dependencies in {xml_path}")
     root = tools.parse_xml(file=xml_path)
     requires = root.find("requires")
     if not requires:
         return
     deps = requires.findall("import")
 
-    for dep in [
-        d
-        for d in deps
-        if not d.get("addon").startswith("xbmc") and not d.get("optional") == "true"
-    ]:
+    for dep in [d for d in deps if not d.get("addon").startswith("xbmc") and d.get("optional") != "true"]:
         plugin_id = dep.get("addon")
         installed_cond = "System.HasAddon({0})".format(plugin_id)
         if tools.get_condition(installed_cond):
             continue
 
-        tools.log("Installing dependency: {}".format(plugin_id))
+        tools.log(f"Installing dependency: {plugin_id}")
         tools.execute_builtin("InstallAddon({0})".format(plugin_id))
 
         clicked = False
@@ -163,10 +158,7 @@ def _install_deps(addon):
         timeout = 10
         while not tools.get_condition(installed_cond):
             if time.time() >= start + timeout:
-                tools.log(
-                    "Timed out installing dependency: {}".format(plugin_id),
-                    level="warning",
-                )
+                tools.log(f"Timed out installing dependency: {plugin_id}", level="warning")
                 failed_deps.append(plugin_id)
                 break
 
@@ -202,7 +194,7 @@ def _set_enabled(addon, enabled, exists=True):
 
     if not exists and not enabled:
         return False
-    elif not exists and enabled:
+    elif not exists:
         db_file = _get_addons_db()
         connection = sqlite3.connect(db_file)
         cursor = connection.cursor()
@@ -226,10 +218,9 @@ def _set_enabled(addon, enabled, exists=True):
     ) == enabled
 
     tools.log(
-        "{}{}{}abled".format(
-            addon, " " if new_status else " not ", "en" if enabled else "dis"
-        )
+        f'{addon}{" " if new_status else " not "}{"en" if enabled else "dis"}abled'
     )
+
     return new_status
 
 
@@ -241,11 +232,11 @@ def _exists(addon):
     }
 
     addons = tools.execute_jsonrpc(params)
-    exists = False
-    if addon in [a.get("addonid") for a in addons.get("result", {}).get("addons", {})]:
-        exists = True
+    exists = addon in [
+        a.get("addonid") for a in addons.get("result", {}).get("addons", {})
+    ]
 
-    tools.log("{} {} installed".format(addon, "is" if exists else "not"))
+    tools.log(f'{addon} {"is" if exists else "not"} installed')
     return exists
 
 
@@ -275,9 +266,9 @@ def update_addon(repo, commit=None, label=None):
     )
     progress.update(0)
 
-    location = _get_zip_file(repo["user"], repo["repo_name"], sha=commit["sha"])
-
-    if location:
+    if location := _get_zip_file(
+        repo["user"], repo["repo_name"], sha=commit["sha"]
+    ):
         progress.update(
             25,
             settings.get_localized_string(30020).format(
@@ -325,9 +316,7 @@ def update_addon(repo, commit=None, label=None):
 
         _set_enabled(plugin_id, True, exists)
 
-        progress.update(
-            100, settings.get_localized_string(30067 if not exists else 30021)
-        )
+        progress.update(100, settings.get_localized_string(30021 if exists else 30067))
 
         if failed_deps:
             dialog.ok(
@@ -348,7 +337,6 @@ def update_addon(repo, commit=None, label=None):
 
 
 def update_menu(repo):
-    action_items = []
     with tools.busy_dialog():
         if type(repo) != dict:
             repo = repository.get_repos(repo)
@@ -359,7 +347,7 @@ def update_menu(repo):
         default_branch = API.get_default_branch(repo["user"], repo["repo_name"])
         repo_branches = list(API.get_repo_branches(repo["user"], repo["repo_name"]))
 
-    action_items.append(
+    action_items = [
         (
             30088,
             settings.get_localized_string(30089).format(
@@ -375,9 +363,9 @@ def update_menu(repo):
                 "label": default_branch,
             },
         )
-    )
+    ]
 
-    if len(repo_tags) > 0 and "message" not in repo_tags[0]:
+    if repo_tags and "message" not in repo_tags[0]:
         action_items.append(
             (30084, 30094, _tag_menu, "tag.png", {"repo": repo, "repo_tags": repo_tags})
         )
@@ -492,11 +480,10 @@ def _branch_menu(repo, repo_branches):
         for i in sorted_branches:
             date = tools.to_local_time(i["updated_at"])
             li = xbmcgui.ListItem(
-                "{} - ({})".format(
-                    i["branch"]["name"], color.color_string(i["sha"][:7])
-                ),
+                f'{i["branch"]["name"]} - ({color.color_string(i["sha"][:7])})',
                 label2=settings.get_localized_string(30016).format(date),
             )
+
 
             if not _compact:
                 art = os.path.join(_media_path, "branch.png")
@@ -552,17 +539,19 @@ def _commit_menu(repo, branch):
                 adds = stats.get("additions", 0)
                 deletes = stats.get("deletions", 0)
                 add_text = (
-                    color.color_string("[B]+[/B] {}".format(adds), "springgreen")
+                    color.color_string(f"[B]+[/B] {adds}", "springgreen")
                     if adds > 0
-                    else "[B]+[/B] {}".format(adds)
-                )
-                delete_text = (
-                    color.color_string("[B]-[/B] {}".format(deletes), "crimson")
-                    if deletes > 0
-                    else "[B]-[/B] {}".format(deletes)
+                    else f"[B]+[/B] {adds}"
                 )
 
-                byline = "{} {}: ".format(add_text, delete_text) + byline
+                delete_text = (
+                    color.color_string(f"[B]-[/B] {deletes}", "crimson")
+                    if deletes > 0
+                    else f"[B]-[/B] {deletes}"
+                )
+
+
+                byline = f"{add_text} {delete_text}: " + byline
             li = xbmcgui.ListItem(
                 "{} - {}".format(
                     color.color_string(commit["sha"][:7]),
@@ -588,10 +577,10 @@ def _commit_menu(repo, branch):
     )
 
     if selection > -1:
-        del dialog
         update_addon(
             repo, sorted_commits[selection], sorted_commits[selection]["sha"][:7]
         )
     else:
         dialog.notification(_addon_name, settings.get_localized_string(30015))
-        del dialog
+
+    del dialog

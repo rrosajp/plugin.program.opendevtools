@@ -65,8 +65,7 @@ class ThreadPoolWorker(threading.Thread):
                 try:
                     self.tasks.task_done()
                 except Exception as e:
-                    print("task done error: {}".format(repr(e)))
-                    pass
+                    print(f"task done error: {repr(e)}")
 
 
 class ThreadPool:

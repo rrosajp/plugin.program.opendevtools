@@ -25,18 +25,18 @@ _color = settings.get_setting_string("general.color")
 
 
 def _get_log_files():
-    files = []
     if not os.path.exists(_log_location):
         return
 
-    for log in [
-        i
-        for i in os.listdir(_log_location)
-        if os.path.isfile(os.path.join(_log_location, i)) and not i.endswith('.dmp')
-    ]:
-        files.append(os.path.join(_log_location, log))
-
-    return files
+    return [
+        os.path.join(_log_location, log)
+        for log in [
+            i
+            for i in os.listdir(_log_location)
+            if os.path.isfile(os.path.join(_log_location, i))
+            and not i.endswith('.dmp')
+        ]
+    ]
 
 
 def _select_log_file():
@@ -57,7 +57,7 @@ def _select_log_file():
 
 
 def _get_log_contents(logfile=None):
-    if logfile == None:
+    if logfile is None:
         logfile = os.path.join(_log_location, "kodi.log")
     if os.path.exists(logfile):
         return tools.read_from_file(logfile)
@@ -76,7 +76,7 @@ def _log_dialog(log_key):
     url = log_url(log_key)
     copied = tools.copy2clip(url)
 
-    qr_code = qr.generate_qr(url, _addon_data, "{}.png".format(log_key))
+    qr_code = qr.generate_qr(url, _addon_data, f"{log_key}.png")
     top = [(settings.get_localized_string(30068), "#efefefff"), (url, _color)]
     bottom = [(settings.get_localized_string(30072), "#efefefff")] if copied else []
     qr.qr_dialog(
@@ -85,37 +85,38 @@ def _log_dialog(log_key):
         bottom_text=bottom,
     )
 
-    tools.execute_builtin("ShowPicture({})".format(qr_code))
+    tools.execute_builtin(f"ShowPicture({qr_code})")
     while tools.get_condition("Window.IsActive(slideshow)"):
         xbmc.sleep(1000)
     os.remove(qr_code)
 
 
 def log_url(log_key):
-    return _paste_url + "raw/" + log_key
+    return f"{_paste_url}raw/{log_key}"
 
 
 def upload_log(choose=False, dialog=False):
     logfile = _select_log_file() if choose else None
     log_data = _censor_log_content(_get_log_contents(logfile))
-    user_agent = "{}: {}".format(_addon_id, _addon_version)
+    user_agent = f"{_addon_id}: {_addon_version}"
 
     try:
         response = requests.post(
-            _paste_url + "documents",
+            f"{_paste_url}documents",
             data=log_data.encode("utf-8"),
             headers={"User-Agent": user_agent},
         ).json()
+
         if "key" in response:
             if dialog:
                 _log_dialog(response["key"])
             return True, response["key"]
         elif "message" in response:
-            tools.log("Upload failed: {}".format(response["message"]), level="error")
+            tools.log(f'Upload failed: {response["message"]}', level="error")
             return False, response["message"]
         else:
-            tools.log("Invalid response: {}".format(response), level="error")
+            tools.log(f"Invalid response: {response}", level="error")
             return False, "Error posting the log file."
     except requests.exceptions.RequestException as e:
-        tools.log("Failed to retrieve the paste URL: {}".format(e), level="error")
+        tools.log(f"Failed to retrieve the paste URL: {e}", level="error")
         return False, "Failed to retrieve the paste URL."

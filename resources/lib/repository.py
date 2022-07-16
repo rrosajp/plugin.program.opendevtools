@@ -101,7 +101,7 @@ def get_repos(key=None):
                 if r == key:
                     return repos.get(key, {})
 
-    return repos if not key else repos.get(key, {})
+    return repos.get(key, {}) if key else repos
 
 
 def add_repository():
@@ -146,34 +146,40 @@ def add_repository():
         addon_repos = [i["repo_name"] for i in repos]
         for i in repos:
             byline = (
-                "{} - ".format(i["repo_name"])
-                + ", ".join(
-                    [
-                        settings.get_localized_string(30049).format(i["user"]),
-                        settings.get_localized_string(30016).format(
-                            tools.to_local_time(i["updated_at"])
-                        ),
-                    ]
+                (
+                    f'{i["repo_name"]} - '
+                    + ", ".join(
+                        [
+                            settings.get_localized_string(30049).format(
+                                i["user"]
+                            ),
+                            settings.get_localized_string(30016).format(
+                                tools.to_local_time(i["updated_at"])
+                            ),
+                        ]
+                    )
                 )
                 if i["user"].lower() != user
-                else "{} - ".format(i["repo_name"])
-                + settings.get_localized_string(30016).format(
-                    tools.to_local_time(i["updated_at"])
+                else (
+                    f'{i["repo_name"]} - '
+                    + settings.get_localized_string(30016).format(
+                        tools.to_local_time(i["updated_at"])
+                    )
                 )
             )
+
             li = xbmcgui.ListItem(
-                "{} - ({})".format(
-                    i["name"], ", ".join([e.title() for e in i["extensions"]])
-                ),
+                f'{i["name"]} - ({", ".join([e.title() for e in i["extensions"]])})',
                 label2=byline,
             )
+
 
             if not _compact:
                 li.setArt({"thumb": i["icon"]})
 
             repo_items.append(li)
 
-    if len(addon_repos) == 0:
+    if not addon_repos:
         dialog.ok(_addon_name, settings.get_localized_string(30058))
         del dialog
         return
@@ -196,7 +202,7 @@ def add_repository():
         del dialog
         return
 
-    tools.log("Reading addon.xml from {}/{}".format(user, repo))
+    tools.log(f"Reading addon.xml from {user}/{repo}")
     addon = tools.parse_xml(text=addon_xml.encode("utf-8"))
 
     name = addon.get("name")
@@ -234,7 +240,7 @@ def sort_branches(repo, branches):
 def _add_repo(user, repo, name, plugin_id, timestamp=None, update=False, path=None):
     dialog = xbmcgui.Dialog()
 
-    key = user + "-" + plugin_id
+    key = f"{user}-{plugin_id}"
     addon_def = {
         key: {
             "user": user,
@@ -245,7 +251,7 @@ def _add_repo(user, repo, name, plugin_id, timestamp=None, update=False, path=No
             "timestamp": timestamp or time.time(),
         }
     }
-    filename = key + ".json"
+    filename = f"{key}.json"
 
     tools.create_folder(_json_path)
     tools.write_to_file(
@@ -260,7 +266,7 @@ def _add_repo(user, repo, name, plugin_id, timestamp=None, update=False, path=No
 
 
 def _update_repo(repo, **kwargs):
-    key = "{}-{}".format(repo["user"], repo["plugin_id"])
+    key = f'{repo["user"]}-{repo["plugin_id"]}'
     repo_def = get_repos(key)
     repo_def.update(**kwargs)
 
@@ -274,7 +280,7 @@ def _update_repo(repo, **kwargs):
 def _check_repo(user, repo):
     dialog = xbmcgui.Dialog()
 
-    can_get = API.get("repos/{}/{}".format(user, repo))
+    can_get = API.get(f"repos/{user}/{repo}")
     if not can_get.ok:
         dialog.ok(_addon_name, settings.get_localized_string(30024))
         del dialog
@@ -286,9 +292,7 @@ def _prompt_for_update(key):
     dialog = xbmcgui.Dialog()
 
     if dialog.yesno(_addon_name, settings.get_localized_string(30053)):
-        tools.execute_builtin(
-            "RunScript({},action=update_addon,id={})".format(_addon_id, key)
-        )
+        tools.execute_builtin(f"RunScript({_addon_id},action=update_addon,id={key})")
     del dialog
 
 
@@ -297,7 +301,7 @@ def remove_repository(repo):
     repos = get_repos()
 
     filename = repo["filename"]
-    repo_defs = [i for i in repos.values()]
+    repo_defs = list(repos.values())
 
     indices = [i for i, x in enumerate(repo_defs) if x["filename"] == filename]
     if len(indices) > 1:
@@ -329,7 +333,7 @@ def get_repo_info(repo_def):
     if not addon_xml:
         return
 
-    tools.log("Reading addon.xml from {}/{}".format(user, repo))
+    tools.log(f"Reading addon.xml from {user}/{repo}")
     addon = tools.parse_xml(text=addon_xml.encode("utf-8"))
 
     def_name = addon.get("name")
@@ -379,14 +383,12 @@ def get_icon(user, repo, plugin_id, addon_xml=None):
         addon_xml = API.get_file(user, repo, "addon.xml", text=True)
 
     if addon_xml:
-        tools.log("Finding icon in addon.xml from {}/{}".format(user, repo))
+        tools.log(f"Finding icon in addon.xml from {user}/{repo}")
         addon = tools.parse_xml(text=addon_xml.encode("utf-8"))
 
         try:
             icon_path = "icon.png"
-            def_icon = list(addon.iter("icon"))
-
-            if def_icon and len(def_icon) > 0:
+            if def_icon := list(addon.iter("icon")):
                 icon_path = def_icon[0].text
 
             if os.path.exists(addon_path):
@@ -395,7 +397,7 @@ def get_icon(user, repo, plugin_id, addon_xml=None):
                 icon_url = API.get_file(user, repo, icon_path)["download_url"]
                 icon = requests.head(icon_url, allow_redirects=True).url
         except Exception as e:
-            tools.log("Could not get icon: {}".format(e), level="warning")
+            tools.log(f"Could not get icon: {e}", level="warning")
 
     return icon
 
@@ -406,7 +408,7 @@ def get_extensions(user, repo, addon_xml=None):
         addon_xml = API.get_file(user, repo, "addon.xml", text=True)
 
     if addon_xml:
-        tools.log("Checking for extensions in {}/{}".format(user, repo))
+        tools.log(f"Checking for extensions in {user}/{repo}")
         root = tools.parse_xml(text=addon_xml.encode("utf-8"))
 
         try:
@@ -420,15 +422,13 @@ def get_extensions(user, repo, addon_xml=None):
                             provides = ext.find("provides")
                             if provides is not None and provides.text:
                                 all_provides = provides.text.split(" ")
-                                for p in all_provides:
-                                    if p in ext_point:
-                                        extensions.append(ext_point[p])
+                                extensions.extend(ext_point[p] for p in all_provides if p in ext_point)
                             else:
                                 extensions.append(ext_point[None])
                         else:
                             extensions.append(ext_point)
         except Exception as e:
-            tools.log("Could not check for extensions: {}".format(e), level="warning")
+            tools.log(f"Could not check for extensions: {e}", level="warning")
     return extensions
 
 
@@ -458,9 +458,12 @@ def repo_menu():
 
             li = xbmcgui.ListItem(
                 name,
-                label2="{} - ".format(repo_name)
-                + settings.get_localized_string(30049).format(user),
+                label2=(
+                    f"{repo_name} - "
+                    + settings.get_localized_string(30049).format(user)
+                ),
             )
+
 
             if not _compact:
                 li.setArt({"thumb": get_icon(user, repo_name, plugin_id)})
@@ -496,11 +499,12 @@ def _exclude_filter(repo):
 
     items = sorted(
         [
-            "/{}".format(i)
+            f"/{i}"
             for i in os.listdir(addon_path)
             if os.path.isdir(os.path.join(addon_path, i))
         ]
     )
+
     items += sorted(
         [
             i
@@ -521,9 +525,9 @@ def _exclude_filter(repo):
                 art = "folder.png"
             else:
                 ext = i.split('.')[-1]
-                file = os.path.join(_media_path, "{}.png".format(ext))
+                file = os.path.join(_media_path, f"{ext}.png")
                 if os.path.exists(file):
-                    art = "{}.png".format(ext)
+                    art = f"{ext}.png"
             li.setArt({"thumb": os.path.join(_media_path, art)})
         list_items.append(li)
 
@@ -548,15 +552,13 @@ def _exclude_filter(repo):
             del dialog
             return
 
-    update = dialog.yesno(
+    if update := dialog.yesno(
         settings.get_localized_string(30095),
         settings.get_localized_string(30098).format(
             color.color_string(len(selection)),
             color.color_string(repo["repo_name"]),
         ),
-    )
-
-    if update:
+    ):
         _update_repo(repo, exclude_items=excluded_items)
         delete = dialog.yesno(
             settings.get_localized_string(30095), settings.get_localized_string(30099)

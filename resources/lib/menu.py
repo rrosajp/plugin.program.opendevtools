@@ -16,9 +16,7 @@ _compact = settings.get_setting_boolean("general.compact")
 
 
 def main_menu():
-    auth = oauth.check_auth()
-
-    if auth:
+    if auth := oauth.check_auth():
         actions = tools.build_menu(
             [
                 (30074, 30075, repository.repo_menu, "github.png"),

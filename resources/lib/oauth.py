@@ -25,16 +25,15 @@ _color = settings.get_setting_string("general.color")
 
 def force_auth():
     dialog = xbmcgui.Dialog()
-    if not _access_token:
-        if dialog.yesno(_addon_name, settings.get_localized_string(30005)):
-            authorize(True)
+    if not _access_token and dialog.yesno(
+        _addon_name, settings.get_localized_string(30005)
+    ):
+        authorize(True)
     del dialog
 
 
 def check_auth():
-    if not _access_token:
-        return False
-    return True
+    return bool(_access_token)
 
 
 def authorize(in_addon=False):
@@ -56,7 +55,7 @@ def authorize(in_addon=False):
         bottom_text=bottom,
     )
 
-    tools.execute_builtin("ShowPicture({})".format(qr_code))
+    tools.execute_builtin(f"ShowPicture({qr_code})")
     expires = time.time() + init["expires_in"]
 
     while True:
@@ -85,7 +84,7 @@ def authorize(in_addon=False):
     os.remove(qr_code)
 
     if in_addon:
-        tools.execute_builtin("RunScript({})".format(_addon_id))
+        tools.execute_builtin(f"RunScript({_addon_id})")
     else:
         settings.open_settings()
 
