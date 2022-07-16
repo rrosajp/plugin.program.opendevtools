@@ -56,7 +56,7 @@ def busy_dialog():
 
 
 def reload_profile():
-    execute_builtin("LoadProfile({})".format(xbmc.getInfoLabel("system.profilename")))
+    execute_builtin(f'LoadProfile({xbmc.getInfoLabel("system.profilename")})')
 
 
 def reload_skin():
@@ -65,20 +65,20 @@ def reload_skin():
 
 def remove_folder(path):
     if xbmcvfs.exists(ensure_path_is_dir(path)):
-        log("Removing {}".format(path))
+        log(f"Removing {path}")
         try:
             shutil.rmtree(path)
         except Exception as e:
-            log("Error removing {}: {}".format(path, e))
+            log(f"Error removing {path}: {e}")
 
 
 def remove_file(path):
     if xbmcvfs.exists(path):
-        log("Removing {}".format(path))
+        log(f"Removing {path}")
         try:
             os.remove(path)
         except Exception as e:
-            log("Error removing {}: {}".format(path, e))
+            log(f"Error removing {path}: {e}")
 
 
 def cleanup_old_files():
@@ -96,17 +96,14 @@ def clear_temp():
             elif os.path.isfile(path) and path not in ["kodi.log"]:
                 shutil.rmtree(path)
     except (OSError, IOError) as e:
-        log("Failed to cleanup temporary storage: {}".format(e))
+        log(f"Failed to cleanup temporary storage: {e}")
 
 
 def read_from_file(file_path):
     try:
         f = xbmcvfs.File(file_path, "r")
         content = f.read()
-        if sys.version_info > (3, 0, 0):
-            return content
-        else:
-            return content.decode("utf-8-sig")
+        return content if sys.version_info > (3, 0, 0) else content.decode("utf-8-sig")
     except IOError:
         return None
     finally:
@@ -135,14 +132,14 @@ def write_to_file(file_path, content, bytes=False):
 def parse_xml(file=None, text=None):
     if (file and text) or not (file or text):
         raise ValueError("Incorrect parameters for parsing.")
-    if file and not text:
+    if file:
         text = read_from_file(file)
 
     text = text.strip()
     try:
         root = ElementTree.fromstring(text)
     except ElementTree.ParseError as e:
-        log("Error parsing XML: {}".format(e), level="error")
+        log(f"Error parsing XML: {e}", level="error")
     return root
 
 
@@ -201,14 +198,13 @@ def smart_merge_dictionary(
                     new_value = sorted(original_value)
                 except TypeError:  # Sorting of complex array doesn't work.
                     new_value = original_value
-                    pass
         if new_value:
             dictionary[new_key] = new_value
     return dictionary
 
 
 def log(msg, level="debug"):
-    xbmc.log(_addon_name + ": " + msg, level=_log_levels[level])
+    xbmc.log(f"{_addon_name}: {msg}", level=_log_levels[level])
 
 
 def ensure_path_is_dir(path):
@@ -224,7 +220,7 @@ def ensure_path_is_dir(path):
             path = path.split("/")[0]
         return path + "\\"
     elif not path.endswith("/"):
-        return path + "/"
+        return f"{path}/"
     return path
 
 
@@ -278,8 +274,7 @@ def get_current_skin():
         "params": {"properties": ["skin"]},
     }
 
-    skin = execute_jsonrpc(params).get("result", {}).get("skin", {}).get("id")
-    return skin
+    return execute_jsonrpc(params).get("result", {}).get("skin", {}).get("id")
 
 
 def copy2clip(txt):
@@ -288,10 +283,10 @@ def copy2clip(txt):
     platform = sys.platform
     if platform == "win32":
         try:
-            cmd = "echo " + txt.strip() + "|clip"
+            cmd = f"echo {txt.strip()}|clip"
             subprocess.check_call(cmd, shell=True)
         except Exception as e:
-            log("Failure to copy to clipboard, \n{}".format(e), "error")
+            log(f"Failure to copy to clipboard, \n{e}", "error")
             return False
         return True
     elif platform.startswith("linux") or platform == "darwin":
@@ -305,7 +300,7 @@ def copy2clip(txt):
             p = subprocess.Popen(cmd, **kwargs)
             p.communicate(input=str(txt))
         except Exception as e:
-            log("Failure to copy to clipboard, \n{}".format(e), "error")
+            log(f"Failure to copy to clipboard, \n{e}", "error")
             return False
         return True
     return False

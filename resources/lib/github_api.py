@@ -21,17 +21,18 @@ class GithubAPI(Session):
         self.client_id = settings.get_setting_string("github.client_id")
         self.headers.update(
             {
-                "Authorization": "Bearer {}".format(self.access_token),
+                "Authorization": f"Bearer {self.access_token}",
                 "Accept": "application/vnd.github.v3+json",
             }
         )
+
         self.base_url = "https://api.github.com/"
         self.auth_url = "https://github.com/login/"
 
     def _update_token(self):
         token = settings.get_setting_string("github.token")
         self.access_token = token
-        self.headers.update({"Authorization": "Bearer {}".format(self.access_token)})
+        self.headers.update({"Authorization": f"Bearer {self.access_token}"})
 
     def get(self, endpoint, **params):
         return super(GithubAPI, self).get(
@@ -44,17 +45,15 @@ class GithubAPI(Session):
 
         for i in range(1, pages + 1):
             headers.update({"page": str(i)})
-            response = super(GithubAPI, self).get(
+            yield super(GithubAPI, self).get(
                 urljoin(self.base_url, endpoint), headers=headers, **params
             )
-            yield response
 
     def get_pages_json(self, endpoint, pages=1, limit=30, **params):
         for page in self.get_pages(endpoint, pages, limit, **params):
             page = page.json()
             if isinstance(page, (list, set, collections.Sequence)):
-                for item in page:
-                    yield item
+                yield from page
             else:
                 yield page
 
@@ -77,8 +76,7 @@ class GithubAPI(Session):
         for page in self.get_all_pages(endpoint, **params):
             page = page.json()
             if isinstance(page, (list, set, collections.Sequence)):
-                for item in page:
-                    yield item
+                yield from page
             else:
                 yield page
 
@@ -86,77 +84,66 @@ class GithubAPI(Session):
         return self.get(endpoint, **params).json()
 
     def get_default_branch(self, user, repo):
-        return self.get_json("repos/{}/{}".format(user, repo)).get("default_branch")
+        return self.get_json(f"repos/{user}/{repo}").get("default_branch")
 
     def get_repo_branch(self, user, repo, branch):
-        return self.get_json("repos/{}/{}/branches/{}".format(user, repo, branch))
+        return self.get_json(f"repos/{user}/{repo}/branches/{branch}")
 
     def get_repo_branches(self, user, repo):
-        return self.get_all_pages_json("repos/{}/{}/branches".format(user, repo))
+        return self.get_all_pages_json(f"repos/{user}/{repo}/branches")
 
     def get_branch_commits(self, user, repo, branch):
         return self.get_pages_json(
-            "repos/{}/{}/commits?sha={}".format(user, repo, branch), limit=_per_page
+            f"repos/{user}/{repo}/commits?sha={branch}", limit=_per_page
         )
 
     def raise_issue(self, user, repo, formatted_issue):
-        return self.post_json("/repos/{}/{}/issues".format(user, repo), formatted_issue)
+        return self.post_json(f"/repos/{user}/{repo}/issues", formatted_issue)
 
     def get_zipball(self, user, repo, branch):
-        return self.get("/repos/{}/{}/zipball/{}".format(user, repo, branch)).content
+        return self.get(f"/repos/{user}/{repo}/zipball/{branch}").content
 
     def get_commit_zip(self, user, repo, commit_sha):
-        return self.get("{}/{}/archive/{}.zip".format(user, repo, commit_sha)).content
+        return self.get(f"{user}/{repo}/archive/{commit_sha}.zip").content
 
     def get_file(self, user, repo, path, text=False):
-        if text:
-            headers = self.headers.copy()
-            headers.update({"Accept": "application/vnd.github.v3.raw"})
-            response = super(GithubAPI, self).get(
-                urljoin(
-                    self.base_url, "/repos/{}/{}/contents/{}".format(user, repo, path)
-                ),
-                headers=headers,
-            )
-            if response.ok:
-                return response.text
-        else:
-            return self.get_json("/repos/{}/{}/contents/{}".format(user, repo, path))
+        if not text:
+            return self.get_json(f"/repos/{user}/{repo}/contents/{path}")
+        headers = self.headers.copy()
+        headers.update({"Accept": "application/vnd.github.v3.raw"})
+        response = super(GithubAPI, self).get(
+            urljoin(self.base_url, f"/repos/{user}/{repo}/contents/{path}"),
+            headers=headers,
+        )
+
+        if response.ok:
+            return response.text
 
     def get_tags(self, user, repo):
-        return self.get_all_pages_json("/repos/{}/{}/git/refs/tags".format(user, repo))
+        return self.get_all_pages_json(f"/repos/{user}/{repo}/git/refs/tags")
 
     def get_commit(self, user, repo, commit_sha):
-        return self.get_json("/repos/{}/{}/commits/{}".format(user, repo, commit_sha))
+        return self.get_json(f"/repos/{user}/{repo}/commits/{commit_sha}")
 
     def get_user(self, user):
-        return self.get_json("/users/{}".format(user))
+        return self.get_json(f"/users/{user}")
 
     def get_username(self):
         self._update_token()
         return self.get_json("/user").get("login", "")
 
     def get_org_repos(self, org):
-        return self.get_json("orgs/{}/repos".format(org))
+        return self.get_json(f"orgs/{org}/repos")
 
     def get_user_repos(self, user):
-        return self.get_json("/users/{}/repos".format(user))
+        return self.get_json(f"/users/{user}/repos")
 
     def get_repos(self, access=""):
-        return self.get_all_pages_json("/user/repos?affiliation={}".format(access))
+        return self.get_all_pages_json(f"/user/repos?affiliation={access}")
 
     def authorize(self, code=None):
-        if not code:
-            result = super(GithubAPI, self).post(
-                urljoin(self.auth_url, "device/code"),
-                data={"client_id": self.client_id, "scope": "repo read:user"},
-                headers=self.headers,
-            )
-
-            return result.json()
-
-        else:
-            result = super(GithubAPI, self).post(
+        result = (
+            super(GithubAPI, self).post(
                 urljoin(self.auth_url, "oauth/access_token"),
                 data={
                     "client_id": self.client_id,
@@ -165,13 +152,18 @@ class GithubAPI(Session):
                 },
                 headers=self.headers,
             )
+            if code
+            else super(GithubAPI, self).post(
+                urljoin(self.auth_url, "device/code"),
+                data={"client_id": self.client_id, "scope": "repo read:user"},
+                headers=self.headers,
+            )
+        )
 
-            return result.json()
-
-        return False
+        return result.json()
 
     def revoke(self):
         return self.post(
-            "applications/{}/grant".format(self.client_id),
+            f"applications/{self.client_id}/grant",
             data={"access_token": self.access_token},
         ).ok

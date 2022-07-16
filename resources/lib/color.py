@@ -149,16 +149,15 @@ _color_chart = [
 
 
 def color_picker():
-    select_list = []
     dialog = xbmcgui.Dialog()
     current_color = settings.get_setting_string("general.color")
-    for i in _color_chart:
-        select_list.append(color_string(i, i))
+    select_list = [color_string(i, i) for i in _color_chart]
     color = dialog.select(
-        "{}: {}".format(_addon_name, settings.get_localized_string(30036)),
+        f"{_addon_name}: {settings.get_localized_string(30036)}",
         select_list,
         preselect=_color_chart.index(current_color),
     )
+
     if color > -1:
         settings.set_setting_string(
             "general.display_color",
@@ -168,4 +167,4 @@ def color_picker():
 
 
 def color_string(text, color=_color):
-    return "[COLOR {}]{}[/COLOR]".format(color, text)
+    return f"[COLOR {color}]{text}[/COLOR]"

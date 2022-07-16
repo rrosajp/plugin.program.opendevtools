@@ -23,8 +23,7 @@ _color = settings.get_setting_string("general.color")
 
 def raise_issue(repo):
     dialog = xbmcgui.Dialog()
-    title = dialog.input(settings.get_localized_string(30006))
-    if title:
+    if title := dialog.input(settings.get_localized_string(30006)):
         description = dialog.input(settings.get_localized_string(30007))
         log_key = None
         response, log_key = logging.upload_log()
@@ -39,20 +38,17 @@ def raise_issue(repo):
 
                 if "message" not in resp:
                     qr_code = qr.generate_qr(
-                        resp["html_url"],
-                        _addon_data,
-                        "{}.png".format(resp["number"]),
+                        resp["html_url"], _addon_data, f'{resp["number"]}.png'
                     )
+
                     top = [
                         (
                             settings.get_localized_string(30008),
                             "#efefefff",
                         ),
-                        (
-                            "{}/{}".format(repo["user"], repo["repo"]),
-                            _color,
-                        ),
+                        (f'{repo["user"]}/{repo["repo"]}', _color),
                     ]
+
                     bottom = [
                         (settings.get_localized_string(30079), "#efefefff"),
                         (resp["html_url"], _color),
@@ -63,7 +59,7 @@ def raise_issue(repo):
                         bottom_text=bottom,
                     )
 
-                    tools.execute_builtin("ShowPicture({})".format(qr_code))
+                    tools.execute_builtin(f"ShowPicture({qr_code})")
                     while tools.get_condition("Window.IsActive(slideshow)"):
                         xbmc.sleep(1000)
                     os.remove(qr_code)
@@ -71,17 +67,14 @@ def raise_issue(repo):
                     dialog.ok(_addon_name, resp["message"])
             except requests.exceptions.RequestException as e:
                 dialog.notification(_addon_name, settings.get_localized_string(30009))
-                tools.log("Error opening issue: {}".format(e), "error")
+                tools.log(f"Error opening issue: {e}", "error")
     else:
         dialog.ok(_addon_name, settings.get_localized_string(30010))
     del dialog
 
 
 def _format_issue(title, description, log_key):
-    log_desc = "{}\n\n{}\n\nLog File - {}".format(
-        settings.get_localized_string(30012).format(_addon_name),
-        description,
-        logging.log_url(log_key),
-    )
+    log_desc = f"{settings.get_localized_string(30012).format(_addon_name)}\n\n{description}\n\nLog File - {logging.log_url(log_key)}"
+
 
     return {"title": title, "body": log_desc}
